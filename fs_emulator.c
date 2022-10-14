@@ -35,29 +35,27 @@ char *uint32_to_str(uint32_t i)
    int length = snprintf(NULL, 0, "%lu", (unsigned long)i);       // pretend to print to a string to get length
    char* str = checked_malloc(length + 1);                        // allocate space for the actual string
    snprintf(str, length + 1, "%lu", (unsigned long)i);            // print to string
-
    return str;
 }
 
 // must be in the root directory where "inodes_list" exists
-void open_inodes_list(char inodes[I_NODES], uint32_t *size)
+// inodes array must have size of I_NODES
+void open_inodes_list(char* inodes, uint32_t *size)
 {
     FILE *file = fopen("inodes_list", "rb");
-    while (*size < I_NODES)
+    if (file == NULL)
     {
-        if (file == NULL)
-        {
-            perror("File not found");
-            return;
-        }
-        uint32_t inode;
-        char type;
-        while(fread(&inode, sizeof(uint32_t), 1, file)) {
-            int n = fread(&type, sizeof(char), 1, file);
-            inodes[inode] = type;
-            ++(*size);
-        }
+        perror("open_inodes_list");
+        return;
     }
+    uint32_t inode;
+    char type;
+    while(fread(&inode, sizeof(uint32_t), 1, file)) {
+        fread(&type, sizeof(char), 1, file);
+        inodes[inode] = type;
+        ++(*size);
+    }
+    fclose(file);
 }
 
 void read_directory(uint32_t root)
@@ -69,15 +67,12 @@ void read_directory(uint32_t root)
     }
     uint32_t inode;
     char type;
-    while(fread(&inode, sizeof(uint32_t), 1, file)) {
-        int n = fread(&type, sizeof(char), 1, file);
-        FILE* inode_file = fopen(uint32_to_str(inode), "rb");
-        char* filename = NULL;
-        fread(filename, sizeof(char), 32, inode_file);
+    // read the int value of file
+    while(fread(&inode, sizeof(uint32_t), 1, file)){
+        char filename[NUM_CHARS];
+        fread(filename, sizeof(char), 32, file);
         printf("%u %s\n", inode, filename);
-        fclose(inode_file);
     }
-
     fclose(file);
 }
 
@@ -87,19 +82,17 @@ void cd(char* dir, uint32_t* curr_dir) {
     uint32_t inode;
     char type;
     while(fread(&inode, sizeof(uint32_t), 1, file)) {
-        int n = fread(&type, sizeof(char), 1, file);
-        FILE* inode_file = fopen(uint32_to_str(inode), "rb");
-        char* filename = NULL;
-        fread(filename, sizeof(char), 32, inode_file);
+        char filename[NUM_CHARS];
+        fread(filename, sizeof(char), 32, file);
         if (strcmp(filename, dir) == 0) {
             *curr_dir = inode;
         }
-        fclose(inode_file);
     }
+    fclose(file);
 }
 
 void ls(uint32_t inode) {
-    
+    read_directory(inode);
 }
 
 void mkdir(char* dir) {
@@ -117,7 +110,6 @@ int main(int argc, char *argv[])
     char *filename = argv[FILE_NAME_POS];
     char inodes[I_NODES];
     uint32_t curr_dir = 0;
-
     // open the directory specified in argv
     int fd = open(filename, O_DIRECTORY);
     if (fd == -1)
@@ -135,9 +127,9 @@ int main(int argc, char *argv[])
     }
 
     uint32_t size = 0;
-    open_inodes_list(0, &size);
+    open_inodes_list(inodes, &size);
 
-    char* line;
+    char* line = NULL;
     size_t length;
 
     read_directory(curr_dir);
@@ -146,7 +138,7 @@ int main(int argc, char *argv[])
         char* orig_line = line;
         char *token = NULL;
         bool cd_ = false, ls_ = false, mkdir_ = false, touch_ = false;
-        while ((token = strsep(&orig_line, " \n\t\r  ")) != NULL)
+        while ((token = strsep(&orig_line, " \n\t\r")) != NULL)
         {
             if (strcmp(token, "^D") == 0) 
                 exit(0);
@@ -169,7 +161,6 @@ int main(int argc, char *argv[])
                 touch(token);
             else {printf("\"%s\" is not recognized as a command\n", token); break;}
         }
-        free(line);
     }
-
+    free(line);
 }
