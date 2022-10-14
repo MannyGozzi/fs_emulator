@@ -8,7 +8,7 @@
 
 #define I_NODES 1024
 #define FILE_NAME_POS 1
-#define NUM_CHARS 32
+#define NUM_CHARS 33
 #define BUFF_SIZE 8192
 
 void validate_params(int argc, char *argv[])
@@ -53,7 +53,7 @@ void open_inodes_list(char* inodes, uint32_t *size)
     while(fread(&inode, sizeof(uint32_t), 1, file)) {
         fread(&type, sizeof(char), 1, file);
         inodes[inode] = type;
-        ++(*size);
+        *size = *size + 1;
     }
     fclose(file);
 }
@@ -81,6 +81,7 @@ void cd(char* dir, uint32_t* curr_dir, char* inodes) {
     FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
     uint32_t inode;
     char type;
+    if (file == NULL) perror("cd");
     while(fread(&inode, sizeof(uint32_t), 1, file)) {
         char filename[NUM_CHARS];
         fread(filename, sizeof(char), 32, file);
@@ -92,7 +93,7 @@ void cd(char* dir, uint32_t* curr_dir, char* inodes) {
                 *curr_dir = inode;
         }
     }
-    fclose(file);
+    if (file != NULL) fclose(file);
 }
 
 void ls(uint32_t inode) {
@@ -103,10 +104,52 @@ void mkdir(char* dir) {
     
 }
 
-void touch(char* filename, uint32_t *size, char* inodes) {
-    ++(*size);
-    inodes
-    // TODO: Create file
+// String supplied must be of length NUM_CHARS
+void null_truncate(char* str) {
+    size_t len = strlen(str);
+    for (int i = len; i <= NUM_CHARS; ++i) {
+        str[i] = '\0';
+    }
+}
+
+void touch(char* target, uint32_t *curr_dir, uint32_t *size, char* inodes) {
+    FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
+    if (strlen(target) > NUM_CHARS) {
+        printf("Filename is too large");
+        return;
+    }
+    if (file == NULL) perror("touch");
+    // check that the file doesn't already exist
+    uint32_t inode;
+    char type;
+    while(fread(&inode, sizeof(uint32_t), 1, file)) {
+        char filename[NUM_CHARS];
+        fread(filename, sizeof(char), 32, file);
+        if (strcmp(filename, target) == 0) {
+            printf("Error: File already exists");
+            return;
+        }
+    }
+    fclose(file);
+
+    // file doesn't exist, we can now create it in the virtual directory
+    file = fopen(uint32_to_str(*curr_dir), "ab");
+    fwrite(size, sizeof(uint32_t), 1, file);
+    char buffer[NUM_CHARS];
+    strcpy(buffer, target);
+    null_truncate(buffer);
+    fwrite(buffer, sizeof(buffer), 1, file);
+    inodes[*size] = 'f';
+    *size = *size + 1;
+    fclose(file);
+
+
+    // update inodes_list to reflect that the file exists
+    file = fopen("inodes_list", "ab");
+    fwrite(size, sizeof(uint32_t), 1, file);
+    char filetype = 'f';
+    fwrite(&filetype, sizeof(char), 1, file);
+    fclose(file);
 }
 
 
@@ -137,21 +180,19 @@ int main(int argc, char *argv[])
 
     char* line = NULL;
     size_t length;
-
-    read_directory(curr_dir);
     
     while (getline(&line, &length, stdin) > 0) {
-        char* orig_line = line;
         char *token = NULL;
         bool cd_ = false, ls_ = false, mkdir_ = false, touch_ = false;
-        while ((token = strsep(&orig_line, " \n\t\r")) != NULL)
-        {
-            if (strcmp(token, "^D") == 0) 
+        char* delim = " \n\t\r";
+        token = strtok(line, delim);
+        while (token != NULL) {
+            if (strcmp(token, "^D") == 0 || strcmp(token, "exit") == 0) 
                 exit(0);
             else if (strcmp(token, "cd") == 0) 
                 cd_ = true;
             else if (strcmp(token, "ls") == 0) 
-                ls_ = true;
+                ls(curr_dir);
             else if (strcmp(token, "mkdir") == 0) 
                 mkdir_ = true; 
             else if (strcmp(token, "touch") == 0) 
@@ -159,13 +200,14 @@ int main(int argc, char *argv[])
             else if (cd_) {
                 cd(token, &curr_dir, inodes);
             }
-            else if (ls_) 
-                ls(curr_dir);
             else if (mkdir_) 
                 mkdir(token);
             else if (touch_) 
-                touch(token, &size, inodes);
-            else {printf("\"%s\" is not recognized as a command\n", token); break;}
+                touch(token, &curr_dir, &size, inodes);
+            else {
+                printf("\"%s\" is not recognized as a command\n", token); break;
+            }
+            token = strtok(NULL, delim);
         }
     }
     free(line);
