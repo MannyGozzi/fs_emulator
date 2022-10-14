@@ -88,21 +88,25 @@ void cd(char *dir, uint32_t *curr_dir, char *inodes)
     char type;
     if (file == NULL)
         perror("cd");
+    bool found = false; // track if we even found a corresponding place to cd into
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
         char filename[NUM_CHARS];
         fread(filename, sizeof(char), 32, file);
         if (strcmp(filename, dir) == 0)
         {
+            found = true;
             // if trying to cd into a file, notify that's not possible
             if (inodes[inode] == 'f')
-                printf("Error: Can't change directory into file\n");
+                printf("\033[33mError: Can't change directory into file\033[0m\n");
             else
                 *curr_dir = inode;
         }
     }
     if (file != NULL)
         fclose(file);
+    if (!found) 
+        printf("\033[33mDirectory for \"%s\" not found. Please enter a valid directory name.\033[0m\n", dir);
 }
 
 void ls(uint32_t inode)
@@ -125,7 +129,7 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
     if (strlen(dir) > NUM_CHARS)
     {
-        printf("Directory name is too large");
+        printf("\033[33mDirectory name is too large\033[0m\n");
         return;
     }
     if (file == NULL){
@@ -141,7 +145,7 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
         fread(filename, sizeof(char), NUM_CHARS, file);
         if (strcmp(filename, dir) == 0)
         {
-            printf("Error: Directory name already in use");
+            printf("\033[33mError: Directory name already in use\033[0m\n");
             return;
         }
     }
@@ -194,7 +198,7 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
     FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
     if (strlen(target) > NUM_CHARS)
     {
-        printf("Filename is too large");
+        printf("\033[33mFilename is too large\033[0m\n");
         return;
     }
     if (file == NULL)
@@ -208,7 +212,7 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
         fread(filename, sizeof(char), 32, file);
         if (strcmp(filename, target) == 0)
         {
-            printf("Error: Filename already in use");
+            printf("\033[33mError: Filename already in use\033[0m\n");
             return;
         }
     }
@@ -261,6 +265,7 @@ int main(int argc, char *argv[])
     char *line = NULL;
     size_t length;
 
+    printf("$ ");
     while (getline(&line, &length, stdin) > 0)
     {
         char *token = NULL;
@@ -285,15 +290,16 @@ int main(int argc, char *argv[])
             }
             else if (mkdir_)
                 mkdir(token, &curr_dir, &size, inodes);
-            else if (touch_)
+            else if (touch_) // note this supports making multiple files at once
                 touch(token, &curr_dir, &size, inodes);
             else
             {
-                printf("\"%s\" is not recognized as a command\n", token);
+                printf("\033[33m\"%s\" is not recognized as a command\033[0m\n", token);
                 break;
             }
             token = strtok(NULL, delim);
         }
+        printf("$ ");
     }
     free(line);
 }
