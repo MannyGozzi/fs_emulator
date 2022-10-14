@@ -77,7 +77,7 @@ void read_directory(uint32_t root)
 }
 
 
-void cd(char* dir, uint32_t* curr_dir) {
+void cd(char* dir, uint32_t* curr_dir, char* inodes) {
     FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
     uint32_t inode;
     char type;
@@ -85,7 +85,11 @@ void cd(char* dir, uint32_t* curr_dir) {
         char filename[NUM_CHARS];
         fread(filename, sizeof(char), 32, file);
         if (strcmp(filename, dir) == 0) {
-            *curr_dir = inode;
+            // if trying to cd into a file, notify that's not possible
+            if (inodes[inode] == 'f')
+                printf("Error: Can't change directory into file\n");
+            else
+                *curr_dir = inode;
         }
     }
     fclose(file);
@@ -99,8 +103,10 @@ void mkdir(char* dir) {
     
 }
 
-void touch(char* filename) {
-    
+void touch(char* filename, uint32_t *size, char* inodes) {
+    ++(*size);
+    inodes
+    // TODO: Create file
 }
 
 
@@ -151,14 +157,14 @@ int main(int argc, char *argv[])
             else if (strcmp(token, "touch") == 0) 
                 touch_ = true;
             else if (cd_) {
-                cd(token, &curr_dir);
+                cd(token, &curr_dir, inodes);
             }
             else if (ls_) 
                 ls(curr_dir);
             else if (mkdir_) 
                 mkdir(token);
             else if (touch_) 
-                touch(token);
+                touch(token, &size, inodes);
             else {printf("\"%s\" is not recognized as a command\n", token); break;}
         }
     }
