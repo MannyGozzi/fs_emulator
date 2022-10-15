@@ -98,7 +98,7 @@ void cd(char *dir, uint32_t *curr_dir, char *inodes)
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
         char filename[NUM_CHARS];
-        fread(filename, sizeof(char), 32, file);
+        fread(filename, sizeof(char), NUM_CHARS, file);
         if (strcmp(filename, dir) == 0)
         {
             found = true;
@@ -167,7 +167,7 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     char buffer[NUM_CHARS];
     strcpy(buffer, dir);
     null_truncate(buffer);
-    fwrite(buffer, sizeof(buffer), 1, file);
+    fwrite(buffer, sizeof(char), NUM_CHARS, file);
     inodes[*size] = 'd';
     fclose(file);
 
@@ -193,14 +193,14 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     strcpy(buffer, curr_dir_dots);
     null_truncate(buffer);
     fwrite(size, sizeof(uint32_t), 1, file);
-    fwrite(buffer, sizeof(buffer), 1, file);
+    fwrite(buffer, sizeof(char), NUM_CHARS, file);
 
     // create .. entry
     memset(buffer, 0, NUM_CHARS);
     strcpy(buffer, parent_dir_dots);
     null_truncate(buffer);
     fwrite(curr_dir, sizeof(uint32_t), 1, file);
-    fwrite(buffer, sizeof(buffer), 1, file);
+    fwrite(buffer, sizeof(char), NUM_CHARS, file);
     fclose(file);
     *size = *size + 1;
 }
@@ -238,9 +238,8 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
     char buffer[NUM_CHARS];
     strcpy(buffer, target);
     null_truncate(buffer);
-    fwrite(buffer, sizeof(buffer), 1, file);
+    fwrite(buffer, sizeof(char), NUM_CHARS, file);
     inodes[*size] = 'f';
-    *size = *size + 1;
     fclose(file);
 
     // update inodes_list to reflect that the file exists
@@ -249,6 +248,7 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
     char filetype = 'f';
     fwrite(&filetype, sizeof(char), 1, file);
     fclose(file);
+    *size = *size + 1;
 }
 
 int main(int argc, char *argv[])
