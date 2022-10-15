@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdint.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -5,6 +6,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <string.h>
+#include <dirent.h>
 
 #define I_NODES 1024
 #define FILE_NAME_POS 1
@@ -63,7 +65,9 @@ void open_inodes_list(char *inodes, uint32_t *size)
 
 void read_directory(uint32_t root)
 {
-    FILE *file = fopen(uint32_to_str(root), "rb");
+    char* root_dir = uint32_to_str(root);
+    FILE *file = fopen(root_dir, "rb");
+    free(root_dir);
     if (file == NULL)
     {
         perror("Read directory");
@@ -83,7 +87,9 @@ void read_directory(uint32_t root)
 
 void cd(char *dir, uint32_t *curr_dir, char *inodes)
 {
-    FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
+    char* dir_str = uint32_to_str(*curr_dir);
+    FILE *file = fopen(dir_str, "rb");
+    free(dir_str);
     uint32_t inode;
     char type;
     if (file == NULL)
@@ -126,7 +132,9 @@ void null_truncate(char *str)
 
 void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
 {
-    FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
+    char* curr_dir_str = uint32_to_str(*curr_dir);
+    FILE *file = fopen(curr_dir_str, "rb");
+    free(curr_dir_str);
     if (strlen(dir) > NUM_CHARS)
     {
         printf("\033[33mDirectory name is too large\033[0m\n");
@@ -152,7 +160,9 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     fclose(file);
 
     // directory doesn't exist, we can now create it in the virtual directory
-    file = fopen(uint32_to_str(*curr_dir), "ab");
+    curr_dir_str = uint32_to_str(*curr_dir);
+    file = fopen(curr_dir_str, "ab");
+    free(curr_dir_str);
     fwrite(size, sizeof(uint32_t), 1, file);
     char buffer[NUM_CHARS];
     strcpy(buffer, dir);
@@ -169,23 +179,25 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     fclose(file);
 
     // add directory inode file to root directory
-    file = fopen(uint32_to_str(*size), "ab");
+    char* inode_dir_str = uint32_to_str(*size);
+    file = fopen(inode_dir_str, "ab");
+    free(inode_dir_str);
     if (file == NULL)
     {
         perror("mkdir");
         return;
     }
     // create . entry
-    char *curr_dir_str = ".";
-    char *parent_dir_str = "..";
-    strcpy(buffer, curr_dir_str);
+    char *curr_dir_dots = ".";
+    char *parent_dir_dots = "..";
+    strcpy(buffer, curr_dir_dots);
     null_truncate(buffer);
     fwrite(size, sizeof(uint32_t), 1, file);
     fwrite(buffer, sizeof(buffer), 1, file);
 
     // create .. entry
     memset(buffer, 0, NUM_CHARS);
-    strcpy(buffer, parent_dir_str);
+    strcpy(buffer, parent_dir_dots);
     null_truncate(buffer);
     fwrite(curr_dir, sizeof(uint32_t), 1, file);
     fwrite(buffer, sizeof(buffer), 1, file);
@@ -195,7 +207,8 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
 
 void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
 {
-    FILE *file = fopen(uint32_to_str(*curr_dir), "rb");
+    char* curr_dir_str = uint32_to_str(*curr_dir);
+    FILE *file = fopen(curr_dir_str, "rb");
     if (strlen(target) > NUM_CHARS)
     {
         printf("\033[33mFilename is too large\033[0m\n");
@@ -219,7 +232,8 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
     fclose(file);
 
     // file doesn't exist, we can now create it in the virtual directory
-    file = fopen(uint32_to_str(*curr_dir), "ab");
+    file = fopen(curr_dir_str, "ab");
+    free(curr_dir_str);
     fwrite(size, sizeof(uint32_t), 1, file);
     char buffer[NUM_CHARS];
     strcpy(buffer, target);
@@ -244,12 +258,19 @@ int main(int argc, char *argv[])
     char inodes[I_NODES];
     uint32_t curr_dir = 0;
     // open the directory specified in argv
-    int fd = open(filename, O_DIRECTORY);
-    if (fd == -1)
+    DIR* dir = opendir(filename);
+    if (dir == NULL)
     {
         perror("Check directory");
         exit(1);
     }
+    closedir(dir); // must free directory
+    // int fd = open(filename, O_DIRECTORY);
+    // if (fd == -1)
+    // {
+    //     perror("Check directory");
+    //     exit(1);
+    // }
 
     // directory located
     int success = chdir(filename);
@@ -266,16 +287,18 @@ int main(int argc, char *argv[])
     size_t length;
 
     printf("$ ");
+    char *token = NULL;
+    const char *delim = " \n\t\r";
     while (getline(&line, &length, stdin) > 0)
     {
-        char *token = NULL;
         bool cd_ = false, ls_ = false, mkdir_ = false, touch_ = false;
-        char *delim = " \n\t\r";
         token = strtok(line, delim);
         while (token != NULL)
         {
-            if (strcmp(token, "^D") == 0 || strcmp(token, "exit") == 0)
+            if (strcmp(token, "^D") == 0 || strcmp(token, "exit") == 0) {
+                free(token);
                 exit(0);
+            }
             else if (strcmp(token, "cd") == 0)
                 cd_ = true;
             else if (strcmp(token, "ls") == 0)
@@ -302,4 +325,5 @@ int main(int argc, char *argv[])
         printf("$ ");
     }
     free(line);
+    free(token);
 }
