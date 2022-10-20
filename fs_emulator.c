@@ -139,14 +139,14 @@ void null_truncate(char *str)
 
 void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
 {
+    if (strlen(dir) > NUM_CHARS)
+    {
+        printf("\033[33mDirectory name is too large (>32 characters)\033[0m\n");
+        return;
+    }
     char *curr_dir_str = uint32_to_str(*curr_dir);
     FILE *file = fopen(curr_dir_str, "rb");
     free(curr_dir_str);
-    if (strlen(dir) > NUM_CHARS)
-    {
-        printf("\033[33mDirectory name is too large\033[0m\n");
-        return;
-    }
     if (file == NULL)
     {
         perror("mkdir");
@@ -163,6 +163,7 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
         if (strcmp(filename, dir) == 0)
         {
             printf("\033[33mError: Directory name already in use\033[0m\n");
+            fclose(file);
             return;
         }
     }
@@ -216,13 +217,13 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
 
 void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
 {
-    char *curr_dir_str = uint32_to_str(*curr_dir);
-    FILE *file = fopen(curr_dir_str, "rb");
     if (strlen(target) > NUM_CHARS)
     {
         printf("\033[33mFilename is too large (>%d characters)\033[0m\n", NUM_CHARS);
         return;
     }
+    char *curr_dir_str = uint32_to_str(*curr_dir);
+    FILE *file = fopen(curr_dir_str, "rb");
     if (file == NULL)
         perror("touch");
     // check that the file doesn't already exist
@@ -236,6 +237,8 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
         if (strcmp(filename, target) == 0)
         {
             printf("\033[33mError: Filename already in use\033[0m\n");
+            free(curr_dir_str);
+            fclose(file);
             return;
         }
     }
