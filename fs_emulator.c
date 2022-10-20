@@ -9,15 +9,15 @@
 #include <dirent.h>
 
 #define I_NODES 1024
-#define FILE_NAME_POS 1
+#define DIR_NAME_POS 1
 #define NUM_CHARS 32
 #define BUFF_SIZE 8192
 
 void validate_params(int argc, char *argv[])
 {
-    if (argc < 2 || argv[FILE_NAME_POS] == NULL)
+    if (argc < 2 || argv[DIR_NAME_POS] == NULL)
     {
-        perror("Validate params");
+        printf("\033[33mPlease enter a valid directory when running the program. \nE.g. <program_name> <directory_name>\033[0m\n");
         exit(1);
     }
 }
@@ -56,6 +56,11 @@ void open_inodes_list(char *inodes, uint32_t *size)
     char type;
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
+        if (*size > I_NODES)
+        {
+            printf("Number of inodes exceeds hard limit of %d", I_NODES);
+            exit(1);
+        }
         fread(&type, sizeof(char), 1, file);
         inodes[inode] = type;
         *size = *size + 1;
@@ -65,7 +70,7 @@ void open_inodes_list(char *inodes, uint32_t *size)
 
 void read_directory(uint32_t root)
 {
-    char* root_dir = uint32_to_str(root);
+    char *root_dir = uint32_to_str(root);
     FILE *file = fopen(root_dir, "rb");
     free(root_dir);
     if (file == NULL)
@@ -78,8 +83,9 @@ void read_directory(uint32_t root)
     // read the int value of file
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
-        char filename[NUM_CHARS];
+        char filename[NUM_CHARS + 1];
         fread(filename, sizeof(char), NUM_CHARS, file);
+        filename[NUM_CHARS] = '\0';
         printf("%u %s\n", inode, filename);
     }
     fclose(file);
@@ -87,7 +93,7 @@ void read_directory(uint32_t root)
 
 void cd(char *dir, uint32_t *curr_dir, char *inodes)
 {
-    char* dir_str = uint32_to_str(*curr_dir);
+    char *dir_str = uint32_to_str(*curr_dir);
     FILE *file = fopen(dir_str, "rb");
     free(dir_str);
     uint32_t inode;
@@ -97,8 +103,9 @@ void cd(char *dir, uint32_t *curr_dir, char *inodes)
     bool found = false; // track if we even found a corresponding place to cd into
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
-        char filename[NUM_CHARS];
+        char filename[NUM_CHARS + 1];
         fread(filename, sizeof(char), NUM_CHARS, file);
+        filename[NUM_CHARS] = '\0';
         if (strcmp(filename, dir) == 0)
         {
             found = true;
@@ -111,7 +118,7 @@ void cd(char *dir, uint32_t *curr_dir, char *inodes)
     }
     if (file != NULL)
         fclose(file);
-    if (!found) 
+    if (!found)
         printf("\033[33mDirectory for \"%s\" not found. Please enter a valid directory name.\033[0m\n", dir);
 }
 
@@ -132,7 +139,7 @@ void null_truncate(char *str)
 
 void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
 {
-    char* curr_dir_str = uint32_to_str(*curr_dir);
+    char *curr_dir_str = uint32_to_str(*curr_dir);
     FILE *file = fopen(curr_dir_str, "rb");
     free(curr_dir_str);
     if (strlen(dir) > NUM_CHARS)
@@ -140,8 +147,9 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
         printf("\033[33mDirectory name is too large\033[0m\n");
         return;
     }
-    if (file == NULL){
-        perror("mkdir"); 
+    if (file == NULL)
+    {
+        perror("mkdir");
         return;
     }
     // check that the file doesn't already exist
@@ -149,8 +157,9 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     char type;
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
-        char filename[NUM_CHARS];
+        char filename[NUM_CHARS + 1];
         fread(filename, sizeof(char), NUM_CHARS, file);
+        filename[NUM_CHARS] = '\0';
         if (strcmp(filename, dir) == 0)
         {
             printf("\033[33mError: Directory name already in use\033[0m\n");
@@ -164,7 +173,7 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     file = fopen(curr_dir_str, "ab");
     free(curr_dir_str);
     fwrite(size, sizeof(uint32_t), 1, file);
-    char buffer[NUM_CHARS];
+    char buffer[NUM_CHARS + 1];
     strcpy(buffer, dir);
     null_truncate(buffer);
     fwrite(buffer, sizeof(char), NUM_CHARS, file);
@@ -179,7 +188,7 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     fclose(file);
 
     // add directory inode file to root directory
-    char* inode_dir_str = uint32_to_str(*size);
+    char *inode_dir_str = uint32_to_str(*size);
     file = fopen(inode_dir_str, "ab");
     free(inode_dir_str);
     if (file == NULL)
@@ -207,11 +216,11 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
 
 void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
 {
-    char* curr_dir_str = uint32_to_str(*curr_dir);
+    char *curr_dir_str = uint32_to_str(*curr_dir);
     FILE *file = fopen(curr_dir_str, "rb");
     if (strlen(target) > NUM_CHARS)
     {
-        printf("\033[33mFilename is too large\033[0m\n");
+        printf("\033[33mFilename is too large (>%d characters)\033[0m\n", NUM_CHARS);
         return;
     }
     if (file == NULL)
@@ -221,8 +230,9 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
     char type;
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
-        char filename[NUM_CHARS];
+        char filename[NUM_CHARS + 1];
         fread(filename, sizeof(char), 32, file);
+        filename[NUM_CHARS] = '\0'; // need to account for the fact that we can have 32 chars with a null after
         if (strcmp(filename, target) == 0)
         {
             printf("\033[33mError: Filename already in use\033[0m\n");
@@ -235,7 +245,7 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
     file = fopen(curr_dir_str, "ab");
     free(curr_dir_str);
     fwrite(size, sizeof(uint32_t), 1, file);
-    char buffer[NUM_CHARS];
+    char buffer[NUM_CHARS + 1];
     strcpy(buffer, target);
     null_truncate(buffer);
     fwrite(buffer, sizeof(char), NUM_CHARS, file);
@@ -254,11 +264,11 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
 int main(int argc, char *argv[])
 {
     validate_params(argc, argv);
-    char *filename = argv[FILE_NAME_POS];
+    char *filename = argv[DIR_NAME_POS];
     char inodes[I_NODES];
     uint32_t curr_dir = 0;
     // open the directory specified in argv
-    DIR* dir = opendir(filename);
+    DIR *dir = opendir(filename);
     if (dir == NULL)
     {
         perror("Check directory");
@@ -295,7 +305,8 @@ int main(int argc, char *argv[])
         token = strtok(line, delim);
         while (token != NULL)
         {
-            if (strcmp(token, "^D") == 0 || strcmp(token, "exit") == 0) {
+            if (strcmp(token, "^D") == 0 || strcmp(token, "exit") == 0)
+            {
                 free(token);
                 exit(0);
             }
