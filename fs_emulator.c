@@ -79,7 +79,6 @@ void read_directory(uint32_t root)
         return;
     }
     uint32_t inode;
-    char type;
     // read the int value of file
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
@@ -97,7 +96,6 @@ void cd(char *dir, uint32_t *curr_dir, char *inodes)
     FILE *file = fopen(dir_str, "rb");
     free(dir_str);
     uint32_t inode;
-    char type;
     if (file == NULL)
         perror("cd");
     bool found = false; // track if we even found a corresponding place to cd into
@@ -141,7 +139,7 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
 {
     if (strlen(dir) > NUM_CHARS)
     {
-        printf("\033[33mDirectory name is too large (>32 characters)\033[0m\n");
+        printf("\033[33mDirectory name is too large (>%d characters)\033[0m\n", NUM_CHARS);
         return;
     }
     char *curr_dir_str = uint32_to_str(*curr_dir);
@@ -154,7 +152,6 @@ void mkdir(char *dir, uint32_t *curr_dir, uint32_t *size, char *inodes)
     }
     // check that the file doesn't already exist
     uint32_t inode;
-    char type;
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
         char filename[NUM_CHARS + 1];
@@ -228,7 +225,6 @@ void touch(char *target, uint32_t *curr_dir, uint32_t *size, char *inodes)
         perror("touch");
     // check that the file doesn't already exist
     uint32_t inode;
-    char type;
     while (fread(&inode, sizeof(uint32_t), 1, file))
     {
         char filename[NUM_CHARS + 1];
@@ -304,7 +300,7 @@ int main(int argc, char *argv[])
     const char *delim = " \n\t\r";
     while (getline(&line, &length, stdin) > 0)
     {
-        bool cd_ = false, ls_ = false, mkdir_ = false, touch_ = false;
+        bool cd_ = false, mkdir_ = false, touch_ = false;
         token = strtok(line, delim);
         while (token != NULL)
         {
